@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Flags War Arena - 1080x1920</title>
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  html, body {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    background: #000000;
+    overflow: hidden;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  /* Strict 1080x1920 (9:16) Lock - Never stretches even in Fullscreen */
+  #gameWrapper {
+    position: relative;
+    width: min(100vw, calc(100vh * (1080 / 1920)));
+    height: min(100vh, calc(100vw * (1920 / 1080)));
+    width: min(100vw, calc(100dvh * (1080 / 1920)));
+    height: min(100dvh, calc(100vw * (1920 / 1080)));
+    aspect-ratio: 1080 / 1920;
+    background: radial-gradient(circle at 18% 42%, rgba(0, 100, 220, 0.34), transparent 55%),
+                radial-gradient(circle at 82% 55%, rgba(210, 20, 50, 0.34), transparent 55%),
+                linear-gradient(180deg, #060a17 0%, #0c1328 50%, #050811 100%);
+    overflow: hidden;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.95);
+    flex-shrink: 0;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: high-quality;
+  }
+  #startOverlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(4, 7, 18, 0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 30;
+    cursor: pointer;
+    text-align: center;
+    padding: 24px;
+  }
+  .startBtn {
+    background: linear-gradient(135deg, #00e5ff, #ff007f);
+    color: #fff;
+    font-weight: 900;
+    font-size: 1.3rem;
+    padding: 18px 38px;
+    border-radius: 50px;
+    border: 2px solid #fff;
+    box-shadow: 0 0 30px rgba(0, 229, 255, 0.75);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    animation: pulseBtn 1.3s infinite alternate;
+  }
+  @keyframes pulseBtn {
+    from { transform: scale(1); box-shadow: 0 0 20px rgba(0, 229, 255, 0.6); }
+    to { transform: scale(1.06); box-shadow: 0 0 38px rgba(255, 0, 127, 0.95); }
+  }
+</style>
+</head>
+<body>
+
+<div id="gameWrapper">
+  <canvas id="arenaCanvas" width="1080" height="1920"></canvas>
+  <div id="startOverlay">
+    <div class="startBtn">▶ TAP TO START</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('arenaCanvas');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const overlay = document.getElementById('startOverlay');
+
+  // Strict 1080x1920 Internal Resolution
+  const W = 1080;
+  const H = 1920;
+  canvas.width = W;
+  canvas.height = H;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  // 64 Countries List
+  const RAW_COUNTRIES = [
+    "pk|Pakistan|#01411C|#ffffff", "in|India|#FF9933|#138808", "br|Brazil|#009739|#FEDD00",
+    "ar|Argentina|#74ACDF|#ffffff", "tr|Turkey|#E30A17|#ffffff", "sa|Saudi Arabia|#006C35|#ffffff",
+    "id|Indonesia|#FF0000|#ffffff", "mx|Mexico|#006847|#CE1126", "de|Germany|#000000|#FFCC00",
+    "fr|France|#002395|#ED2939", "gb|United Kingdom|#012169|#C8102E", "us|United States|#B22234|#3C3B6E",
+    "jp|Japan|#ffffff|#BC002D", "kr|South Korea|#ffffff|#0047A0", "cn|China|#EE1C25|#FFFF00",
+    "eg|Egypt|#CE1126|#000000", "ng|Nigeria|#008751|#ffffff", "za|South Africa|#007749|#FFB81C",
+    "bd|Bangladesh|#006A4E|#F42A41", "my|Malaysia|#010066|#CC0001", "ca|Canada|#FF0000|#ffffff",
+    "it|Italy|#009246|#CE2B37", "es|Spain|#AA151B|#F1BF00", "ru|Russia|#0039A6|#D52B1E",
+    "ua|Ukraine|#0057B7|#FFDD00", "au|Australia|#00008B|#FF0000", "nz|New Zealand|#00247D|#CC142B",
+    "iq|Iraq|#CE1126|#007A3D", "ir|Iran|#239F40|#DA0000", "af|Afghanistan|#000000|#D32011",
+    "ae|UAE|#00732F|#FF0000", "qa|Qatar|#8A1538|#ffffff", "ma|Morocco|#C1272D|#006233",
+    "dz|Algeria|#006233|#D21034", "tn|Tunisia|#E70013|#ffffff", "ke|Kenya|#000000|#BB0000",
+    "gh|Ghana|#CE1126|#FCD116", "sn|Senegal|#00853F|#FDEF42", "co|Colombia|#FCD116|#003893",
+    "cl|Chile|#0039A6|#D52B1E", "pe|Peru|#D91023|#ffffff", "ve|Venezuela|#FFCC00|#CF142B",
+    "uy|Uruguay|#0038A8|#ffffff", "ec|Ecuador|#FFD100|#0072CE", "bo|Bolivia|#D52B1E|#007934",
+    "cu|Cuba|#002A8F|#CB1515", "pl|Poland|#ffffff|#DC143C", "se|Sweden|#006AA7|#FECC02",
+    "no|Norway|#BA0C2F|#00205B", "nl|Netherlands|#AE1C28|#21468B", "be|Belgium|#000000|#FDDA24",
+    "ch|Switzerland|#FF0000|#ffffff", "at|Austria|#ED2939|#ffffff", "pt|Portugal|#006600|#FF0000",
+    "gr|Greece|#0D5EAF|#ffffff", "ro|Romania|#002B7F|#FCD116", "rs|Serbia|#C6363C|#0C4076",
+    "hr|Croatia|#FF0000|#171796", "th|Thailand|#A51931|#2D2A4A", "vn|Vietnam|#DA251D|#FFFF00",
+    "ph|Philippines|#0038A8|#CE1126", "sg|Singapore|#EF3340|#ffffff", "lk|Sri Lanka|#8D153A|#FFBE29",
+    "np|Nepal|#DC143C|#003893"
+  ];
+
+  // Offscreen HD Flag Cache (Ultra-sharp circular flags without distortion)
+  const flagSprites = {};
+  const SPRITE_SIZE = 160;
+
+  function buildFlagSprite(country, img) {
+    const off = document.createElement('canvas');
+    off.width = SPRITE_SIZE;
+    off.height = SPRITE_SIZE;
+    const octx = off.getContext('2d');
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = 'high';
+
+    const r = SPRITE_SIZE / 2 - 4;
+    const cx = SPRITE_SIZE / 2;
+    const cy = SPRITE_SIZE / 2;
+
+    octx.save();
+    octx.beginPath();
+    octx.arc(cx, cy, r, 0, Math.PI * 2);
+    octx.closePath();
+    octx.clip();
+
+    if (img && img.complete && img.naturalWidth > 0) {
+      const iw = img.naturalWidth;
+      const ih = img.naturalHeight;
+      const scale = Math.max((r * 2) / iw, (r * 2) / ih);
+      const dw = iw * scale;
+      const dh = ih * scale;
+      octx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+    } else {
+      octx.fillStyle = country.c1;
+      octx.fillRect(cx - r, cy - r, r * 2, r);
+      octx.fillStyle = country.c2;
+      octx.fillRect(cx - r, cy, r * 2, r);
+      octx.fillStyle = '#ffffff';
+      octx.font = '900 38px sans-serif';
+      octx.textAlign = 'center';
+      octx.textBaseline = 'middle';
+      octx.fillText(country.code.toUpperCase(), cx, cy);
+    }
+
+    // 3D Glossy lens shading
+    const shade = octx.createRadialGradient(cx - r * 0.32, cy - r * 0.35, r * 0.08, cx, cy, r);
+    shade.addColorStop(0, 'rgba(255, 255, 255, 0.32)');
+    shade.addColorStop(0.45, 'rgba(255, 255, 255, 0.0)');
+    shade.addColorStop(0.82, 'rgba(0, 0, 0, 0.08)');
+    shade.addColorStop(1, 'rgba(0, 0, 0, 0.42)');
+    octx.fillStyle = shade;
+    octx.fillRect(cx - r, cy - r, r * 2, r * 2);
+
+    octx.beginPath();
+    octx.ellipse(cx, cy - r * 0.52, r * 0.58, r * 0.24, 0, 0, Math.PI * 2);
+    octx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+    octx.fill();
+    octx.restore();
+
+    octx.beginPath();
+    octx.arc(cx, cy, r, 0, Math.PI * 2);
+    octx.lineWidth = 3.5;
+    octx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+    octx.stroke();
+
+    flagSprites[country.code] = off;
+  }
+
+  const countriesList = RAW_COUNTRIES.map(item => {
+    const [code, name, c1, c2] = item.split('|');
+    const countryObj = { code, name, c1, c2 };
+    buildFlagSprite(countryObj, null);
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => buildFlagSprite(countryObj, img);
+    img.src = `https://flagcdn.com/w320/${code.toLowerCase()}.png`;
+    return countryObj;
+  });
+
+  // Match Timing & Right-Corner 7s Timer Config
+  const TOTAL_COUNTRIES = 64;
+  const MATCH_DURATION = 300; // 5 minutes (300 seconds)
+  const ELIMINATION_SPAN = 294;
+  const STEP_INTERVAL = ELIMINATION_SPAN / (TOTAL_COUNTRIES - 1);
+  const CORNER_TIMER_MAX = 7.0;
+
+  // 1080x1920 Arena Geometry
+  const ARENA_X = W / 2;
+  const ARENA_Y = 850;
+  const ARENA_R = 456;
+  const INNER_R = 124;
+  const BALL_R = 33;
+  const GATE_ANGLE = Math.PI / 2;
+  const GATE_HALF_WIDTH = 0.23;
+
+  // Audio & State
+  let audioCtx = null;
+  let lastCollideSoundMs = 0;
+  let gameStarted = false;
+  let cycleNumber = 1;
+  let usedKings = new Set();
+  let lastKing = null;
+  let currentTargetKingCode = null;
+
+  let balls = [];
+  let fallingBalls = [];
+  let eliminatedList = [];
+  let matchElapsed = 0;
+  let stepElapsed = 0;
+  let rotorAngle = 0;
+  let lastBanner = null;
+  let bannerTimer = 0;
+  let phase = 'PLAYING';
+  let celebrationTimer = 0;
+  let confetti = [];
+  let topSupporters = [];
+
+  // Low-Volume Ball Collision Click
+  function playCollisionSound(impactSpeed) {
+    if (!audioCtx) return;
+    const nowMs = performance.now();
+    if (nowMs - lastCollideSoundMs < 42) return;
+    lastCollideSoundMs = nowMs;
+
+    try {
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      const baseFreq = 520 + Math.min(380, impactSpeed * 45) + (Math.random() * 80 - 40);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(baseFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(170, now + 0.028);
+
+      const vol = Math.min(0.022, Math.max(0.007, impactSpeed * 0.003));
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.028);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.03);
+    } catch (e) {}
+  }
+
+  function playEventSound(type) {
+    if (!audioCtx) return;
+    try {
+      const now = audioCtx.currentTime;
+      if (type === 'eliminate') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(115, now + 0.26);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.004, now + 0.26);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.28);
+      } else if (type === 'win') {
+        const notes = [523.25, 659.25, 783.99, 1046.5];
+        notes.forEach((freq, idx) => {
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = 'triangle';
+          o.frequency.setValueAtTime(freq, now + idx * 0.12);
+          g.gain.setValueAtTime(0.15, now + idx * 0.12);
+          g.gain.exponentialRampToValueAtTime(0.004, now + idx * 0.12 + 0.45);
+          o.connect(g);
+          g.connect(audioCtx.destination);
+          o.start(now + idx * 0.12);
+          o.stop(now + idx * 0.12 + 0.46);
+        });
+      }
+    } catch (e) {}
+  }
+
+  // Live Voice Commentary
+  function speakCommentary(text, priority = false) {
+    if (!('speechSynthesis' in window)) return;
+    try {
+      if (priority || window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+      }
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'en-US';
+      utter.rate = 1.08;
+      utter.pitch = 1.02;
+      window.speechSynthesis.speak(utter);
+    } catch (e) {}
+  }
+
+  function selectNewKing() {
+    if (usedKings.size >= countriesList.length) {
+      usedKings.clear();
+    }
+    const available = countriesList.filter(c => !usedKings.has(c.code));
+    const chosen = available[Math.floor(Math.random() * available.length)];
+    usedKings.add(chosen.code);
+    return chosen.code;
+  }
+
+  function initMatch() {
+    balls = [];
+    fallingBalls = [];
+    eliminatedList = [];
+    matchElapsed = 0;
+    stepElapsed = 0;
+    phase = 'PLAYING';
+    celebrationTimer = 0;
+    confetti = [];
+
+    currentTargetKingCode = selectNewKing();
+
+    const shuffled = [...countriesList].sort(() => Math.random() - 0.5);
+    topSupporters = shuffled.slice(0, 3);
+
+    shuffled.forEach((country, idx) => {
+      const ring = idx < 14 ? 205 : (idx < 36 ? 295 : 378);
+      const angle = (idx * 2.39996) % (Math.PI * 2);
+      const bx = ARENA_X + Math.cos(angle) * ring;
+      const by = ARENA_Y + Math.sin(angle) * ring;
+      const speed = 4.8 + Math.random() * 2.4;
+      const dir = Math.random() * Math.PI * 2;
+      balls.push({
+        ...country,
+        x: bx,
+        y: by,
+        vx: Math.cos(dir) * speed,
+        vy: Math.sin(dir) * speed,
+        r: BALL_R,
+        isKingTarget: country.code === currentTargetKingCode
+      });
+    });
+
+    speakCommentary(`Cycle ${cycleNumber} started! 64 countries in the arena!`, true);
+  }
+
+  function triggerElimination(ballIndex) {
+    const [outBall] = balls.splice(ballIndex, 1);
+    if (!outBall) return;
+
+    const slotIndex = eliminatedList.length;
+    const cols = 16;
+    const cellW = (W - 72) / cols;
+    const cellH = 50;
+    const targetCol = slotIndex % cols;
+    const targetRow = Math.floor(slotIndex / cols);
+    const targetX = 36 + targetCol * cellW + cellW / 2;
+    const targetY = 1485 + targetRow * cellH;
+
+    fallingBalls.push({
+      ...outBall,
+      x: ARENA_X,
+      y: ARENA_Y + ARENA_R,
+      tx: targetX,
+      ty: targetY,
+      progress: 0
+    });
+
+    eliminatedList.push(outBall);
+    lastBanner = outBall;
+    bannerTimer = 3.8;
+    stepElapsed = 0;
+
+    playEventSound('eliminate');
+
+    const rem = balls.length;
+    const phrases = [
+      `${outBall.name} out!`,
+      `${outBall.name} is eliminated! ${rem} remaining!`,
+      `${outBall.name} knocked out!`,
+      `${outBall.name} leaves the arena!`
+    ];
+    const line = rem === 1
+      ? `${outBall.name} is out! We have our final Winning King!`
+      : phrases[slotIndex % phrases.length];
+    speakCommentary(line, true);
+  }
+
+  function crownKing(winnerBall) {
+    phase = 'CELEBRATION';
+    celebrationTimer = 9.0;
+    lastKing = winnerBall;
+    playEventSound('win');
+    speakCommentary(`5 minutes complete! ${winnerBall.name} is the Winning King of Cycle ${cycleNumber}!`, true);
+
+    for (let i = 0; i < 110; i++) {
+      confetti.push({
+        x: ARENA_X,
+        y: ARENA_Y,
+        vx: (Math.random() - 0.5) * 22,
+        vy: (Math.random() - 0.7) * 22,
+        color: ['#00e5ff', '#ff007f', '#ffe600', '#00ff88', '#ffffff'][i % 5],
+        size: 9 + Math.random() * 9
+      });
+    }
+  }
+
+  function update(dt) {
+    rotorAngle += dt * 0.85;
+
+    if (bannerTimer > 0) {
+      bannerTimer = Math.max(0, bannerTimer - dt);
+    }
+
+    for (let i = fallingBalls.length - 1; i >= 0; i--) {
+      const fb = fallingBalls[i];
+      fb.progress += dt * 2.2;
+      if (fb.progress >= 1) {
+        fallingBalls.splice(i, 1);
+      }
+    }
+
+    if (phase === 'CELEBRATION') {
+      celebrationTimer -= dt;
+      confetti.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.38;
+      });
+      if (celebrationTimer <= 0) {
+        cycleNumber++;
+        initMatch();
+      }
+      return;
+    }
+
+    matchElapsed += dt;
+    stepElapsed += dt;
+
+    const shouldBeEliminated = Math.min(
+      TOTAL_COUNTRIES - 1,
+      Math.floor(matchElapsed / STEP_INTERVAL)
+    );
+
+    if (eliminatedList.length < shouldBeEliminated && balls.length > 1) {
+      let bestIdx = -1;
+      let maxY = -Infinity;
+      for (let i = 0; i < balls.length; i++) {
+        if (balls[i].isKingTarget && balls.length > 1) continue;
+        if (balls[i].y > maxY) {
+          maxY = balls[i].y;
+          bestIdx = i;
+        }
+      }
+      if (bestIdx === -1) bestIdx = 0;
+      triggerElimination(bestIdx);
+    }
+
+    if (matchElapsed >= MATCH_DURATION && balls.length >= 1) {
+      while (balls.length > 1) {
+        const idx = balls[0].isKingTarget ? 1 : 0;
+        triggerElimination(idx);
+      }
+      crownKing(balls[0]);
+      return;
+    }
+
+    const gravity = 0.068;
+    for (let i = 0; i < balls.length; i++) {
+      const b = balls[i];
+      b.vy += gravity;
+      b.x += b.vx;
+      b.y += b.vy;
+
+      const spd = Math.hypot(b.vx, b.vy);
+      if (spd < 4.5) {
+        const scale = 4.8 / (spd || 1);
+        b.vx *= scale;
+        b.vy *= scale;
+      } else if (spd > 10.2) {
+        const scale = 10.2 / spd;
+        b.vx *= scale;
+        b.vy *= scale;
+      }
+
+      const dx = b.x - ARENA_X;
+      const dy = b.y - ARENA_Y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      // Inner pink ring bounce
+      if (dist < INNER_R + b.r) {
+        const overlap = (INNER_R + b.r) - dist;
+        b.x += nx * overlap;
+        b.y += ny * overlap;
+        const dot = b.vx * nx + b.vy * ny;
+        if (dot < 0) {
+          b.vx -= 2 * dot * nx;
+          b.vy -= 2 * dot * ny;
+          playCollisionSound(Math.abs(dot));
+        }
+      }
+
+      // Outer cyan ring bounce
+      if (dist > ARENA_R - b.r) {
+        const overlap = dist - (ARENA_R - b.r);
+        b.x -= nx * overlap;
+        b.y -= ny * overlap;
+        const dot = b.vx * nx + b.vy * ny;
+        if (dot > 0) {
+          b.vx -= 2 * dot * nx;
+          b.vy -= 2 * dot * ny;
+          playCollisionSound(Math.abs(dot));
+        }
+      }
+
+      // 6 Rotating purple blocker paddles
+      const ballAng = Math.atan2(dy, dx);
+      if (dist > INNER_R + 26 && dist < ARENA_R - 18) {
+        for (let p = 0; p < 6; p++) {
+          const pAng = rotorAngle + (p * Math.PI) / 3;
+          let diff = Math.atan2(Math.sin(ballAng - pAng), Math.cos(ballAng - pAng));
+          if (Math.abs(diff) < 0.065) {
+            const tx = -Math.sin(pAng);
+            const ty = Math.cos(pAng);
+            b.vx = tx * 7.8 * (diff >= 0 ? 1 : -1);
+            b.vy = ty * 7.8 * (diff >= 0 ? 1 : -1);
+            playCollisionSound(6.0);
+          }
+        }
+      }
+    }
+
+    // Ball-to-ball elastic collisions
+    for (let i = 0; i < balls.length; i++) {
+      for (let j = i + 1; j < balls.length; j++) {
+        const b1 = balls[i];
+        const b2 = balls[j];
+        const dx = b2.x - b1.x;
+        const dy = b2.y - b1.y;
+        const dist = Math.hypot(dx, dy);
+        const minDist = b1.r + b2.r;
+        if (dist > 0 && dist < minDist) {
+          const nx = dx / dist;
+          const ny = dy / dist;
+          const overlap = (minDist - dist) * 0.5;
+          b1.x -= nx * overlap;
+          b1.y -= ny * overlap;
+          b2.x += nx * overlap;
+          b2.y += ny * overlap;
+
+          const kx = b1.vx - b2.vx;
+          const ky = b1.vy - b2.vy;
+          const p = (nx * kx + ny * ky);
+          if (p > 0) {
+            b1.vx -= p * nx;
+            b1.vy -= p * ny;
+            b2.vx += p * nx;
+            b2.vy += p * ny;
+            if (p > 1.1) {
+              playCollisionSound(p);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function drawSharpFlag(x, y, r, country, highlight = false) {
+    const sprite = flagSprites[country.code];
+    if (sprite) {
+      const size = r * 2.08;
+      ctx.drawImage(sprite, x - size / 2, y - size / 2, size, size);
+    }
+    if (highlight) {
+      ctx.beginPath();
+      ctx.arc(x, y, r + 2, 0, Math.PI * 2);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffe600';
+      ctx.stroke();
+    }
+  }
+
+  function roundRect(x, y, w, h, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + w - radius, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+    ctx.lineTo(x + w, y + h - radius);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+    ctx.lineTo(x + radius, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+  }
+
+  function render() {
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, '#070b19');
+    bgGrad.addColorStop(0.5, '#0d1429');
+    bgGrad.addColorStop(1, '#050811');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // 1. Top Header Bar
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 38px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('FLAGS WAR ', 32, 102);
+    ctx.fillStyle = '#ffd000';
+    ctx.fillText('ARENA', 268, 102);
+
+    // COUNTRIES Box
+    roundRect(465, 36, 210, 102, 18);
+    ctx.fillStyle = 'rgba(18, 25, 48, 0.9)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.stroke();
+
+    ctx.fillStyle = '#9aa8c7';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('COUNTRIES', 570, 68);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 48px sans-serif';
+    ctx.fillText(String(TOTAL_COUNTRIES), 570, 120);
+
+    // REMAINING Box
+    roundRect(696, 36, 210, 102, 18);
+    ctx.fillStyle = 'rgba(18, 25, 48, 0.9)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.stroke();
+
+    ctx.fillStyle = '#9aa8c7';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('REMAINING', 801, 68);
+    ctx.fillStyle = '#ffd000';
+    ctx.font = '900 48px sans-serif';
+    ctx.fillText(String(balls.length), 801, 120);
+
+    // Alert Circle
+    ctx.beginPath();
+    ctx.arc(986, 87, 42, 0, Math.PI * 2);
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = '#ff1493';
+    ctx.stroke();
+    ctx.fillStyle = '#ff1493';
+    ctx.font = '900 45px sans-serif';
+    ctx.fillText('!', 986, 103);
+
+    // 2. Sub-Header Panels
+    // Left Box: CHAT SUPPORT
+    roundRect(28, 165, 292, 195, 14);
+    ctx.fillStyle = 'rgba(12, 18, 38, 0.86)';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#00e5ff';
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffd000';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('CHAT SUPPORT', 50, 198);
+    ctx.fillStyle = '#ff3366';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText('LIVE ●', 245, 198);
+
+    topSupporters.forEach((c, idx) => {
+      const yPos = 234 + idx * 44;
+      drawSharpFlag(64, yPos, 16, c);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 17px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(c.name.toUpperCase().slice(0, 10), 92, yPos + 6);
+      ctx.fillStyle = '#00e5ff';
+      ctx.textAlign = 'right';
+      ctx.fillText('1/20', 298, yPos + 6);
+    });
+
+    // Center Prompt & 5-Minute Match Timer
+    const timeRemaining = Math.max(0, Math.ceil(MATCH_DURATION - matchElapsed));
+    const mm = String(Math.floor(timeRemaining / 60)).padStart(2, '0');
+    const ss = String(timeRemaining % 60).padStart(2, '0');
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#b0c4de';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillText(`CYCLE ${cycleNumber}  •  ⏱ ${mm}:${ss}`, ARENA_X, 202);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 42px sans-serif';
+    ctx.fillText('WHERE ARE', ARENA_X, 262);
+    ctx.fillStyle = '#ffd000';
+    ctx.font = '900 46px sans-serif';
+    ctx.fillText('YOU FROM?', ARENA_X, 318);
+
+    // Right Corner Box: Clean 7-Second Elimination Timer (Without bottom meta text)
+    const rx = 760;
+    const ry = 165;
+    const rw = 292;
+    const rh = 195;
+    roundRect(rx, ry, rw, rh, 14);
+    ctx.fillStyle = 'rgba(12, 18, 38, 0.9)';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#ff007f';
+    ctx.stroke();
+
+    ctx.fillStyle = '#00ffaa';
+    ctx.font = '900 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ELIMINATION TIMER (7s)', rx + rw / 2, ry + 34);
+
+    const stepRatio = Math.min(1, stepElapsed / STEP_INTERVAL);
+    const sevenSecLeft = Math.max(0, CORNER_TIMER_MAX * (1 - stepRatio));
+    const sevenSecInt = Math.ceil(sevenSecLeft);
+
+    const gaugeX = rx + 74;
+    const gaugeY = ry + 114;
+    const gaugeR = 48;
+
+    ctx.beginPath();
+    ctx.arc(gaugeX, gaugeY, gaugeR, 0, Math.PI * 2);
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(
+      gaugeX,
+      gaugeY,
+      gaugeR,
+      -Math.PI / 2,
+      -Math.PI / 2 + (1 - stepRatio) * Math.PI * 2
+    );
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = sevenSecLeft <= 2.0 ? '#ff2a6d' : '#00e5ff';
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 34px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${sevenSecInt}s`, gaugeX, gaugeY + 12);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd000';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillText(`NEXT OUT: ${sevenSecLeft.toFixed(1)}s`, rx + 136, ry + 96);
+
+    if (lastKing) {
+      drawSharpFlag(rx + 154, ry + 138, 17, lastKing, true);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 17px sans-serif';
+      ctx.fillText(`👑 ${lastKing.name.slice(0, 8).toUpperCase()}`, rx + 178, ry + 144);
+    } else {
+      ctx.fillStyle = '#b0c4de';
+      ctx.font = 'bold 17px sans-serif';
+      ctx.fillText('👑 KING AT 00:00', rx + 136, ry + 138);
+    }
+
+    // 3. Main Circular Arena
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(ARENA_X, ARENA_Y, ARENA_R, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(10, 15, 34, 0.8)';
+    ctx.fill();
+
+    // 6 Rotating purple blocker paddles
+    ctx.strokeStyle = '#7e57c2';
+    ctx.lineWidth = 18;
+    ctx.lineCap = 'round';
+    for (let p = 0; p < 6; p++) {
+      const ang = rotorAngle + (p * Math.PI) / 3;
+      const r1 = INNER_R + 42;
+      const r2 = ARENA_R - 20;
+      ctx.beginPath();
+      ctx.moveTo(ARENA_X + Math.cos(ang) * r1, ARENA_Y + Math.sin(ang) * r1);
+      ctx.lineTo(ARENA_X + Math.cos(ang) * r2, ARENA_Y + Math.sin(ang) * r2);
+      ctx.stroke();
+    }
+
+    // Inner glowing pink ring
+    ctx.beginPath();
+    ctx.arc(ARENA_X, ARENA_Y, INNER_R, 0, Math.PI * 2);
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = '#ff1493';
+    ctx.shadowColor = '#ff1493';
+    ctx.shadowBlur = 22;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Outer glowing cyan ring with bottom exit gate
+    ctx.beginPath();
+    ctx.arc(
+      ARENA_X,
+      ARENA_Y,
+      ARENA_R,
+      GATE_ANGLE + GATE_HALF_WIDTH,
+      GATE_ANGLE - GATE_HALF_WIDTH + Math.PI * 2
+    );
+    ctx.lineWidth = 12;
+    ctx.strokeStyle = '#00e5ff';
+    ctx.shadowColor = '#00e5ff';
+    ctx.shadowBlur = 30;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Bottom exit gate dashed line
+    const gx1 = ARENA_X + Math.cos(GATE_ANGLE - GATE_HALF_WIDTH) * ARENA_R;
+    const gy1 = ARENA_Y + Math.sin(GATE_ANGLE - GATE_HALF_WIDTH) * ARENA_R;
+    const gx2 = ARENA_X + Math.cos(GATE_ANGLE + GATE_HALF_WIDTH) * ARENA_R;
+    const gy2 = ARENA_Y + Math.sin(GATE_ANGLE + GATE_HALF_WIDTH) * ARENA_R;
+    ctx.beginPath();
+    ctx.moveTo(gx1, gy1);
+    ctx.lineTo(gx2, gy2);
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(255, 50, 90, 0.8)';
+    ctx.setLineDash([12, 9]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // 4. Draw Active HD Flag Spheres
+    for (let i = 0; i < balls.length; i++) {
+      const b = balls[i];
+      drawSharpFlag(b.x, b.y, b.r, b);
+    }
+
+    // 5. Draw Falling Eliminated Flag Spheres
+    for (let i = 0; i < fallingBalls.length; i++) {
+      const fb = fallingBalls[i];
+      const cx = fb.x + (fb.tx - fb.x) * fb.progress;
+      const cy = fb.y + (fb.ty - fb.y) * fb.progress;
+      const cr = BALL_R * (1 - 0.38 * fb.progress);
+      drawSharpFlag(cx, cy, cr, fb, true);
+    }
+
+    // 6. Eliminated Popup Banner
+    if (lastBanner && bannerTimer > 0) {
+      const bx = 56;
+      const by = 1242;
+      const bw = 620;
+      const bh = 116;
+      roundRect(bx, by, bw, bh, 24);
+      ctx.fillStyle = 'rgba(14, 18, 34, 0.95)';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ff2a6d';
+      ctx.stroke();
+
+      drawSharpFlag(bx + 64, by + bh / 2, 40, lastBanner, true);
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#ff2a6d';
+      ctx.font = '900 22px sans-serif';
+      ctx.fillText('ELIMINATED', bx + 126, by + 46);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 39px sans-serif';
+      ctx.fillText(lastBanner.name.toUpperCase(), bx + 126, by + 94);
+    }
+
+    // 7. ALL ELIMINATED Tray
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 33px sans-serif';
+    ctx.fillText('ALL ELIMINATED', ARENA_X, 1414);
+
+    const cols = 16;
+    const cellW = (W - 72) / cols;
+    const cellH = 50;
+    for (let i = 0; i < eliminatedList.length; i++) {
+      const item = eliminatedList[i];
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const ex = 36 + col * cellW + cellW / 2;
+      const ey = 1464 + row * cellH;
+      drawSharpFlag(ex, ey, 20, item);
+    }
+
+    // 8. Bottom Progress Bar & Counter
+    const barX = 42;
+    const barY = 1702;
+    const barW = W - 84;
+    const barH = 12;
+
+    roundRect(barX, barY, barW, barH, 6);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fill();
+
+    const progW = Math.max(18, (eliminatedList.length / TOTAL_COUNTRIES) * barW);
+    roundRect(barX, barY, progW, barH, 6);
+    ctx.fillStyle = '#00e5ff';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(barX + progW, barY + barH / 2, 10, 0, Math.PI * 2);
+    ctx.fillStyle = '#00e5ff';
+    ctx.fill();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#9aa8c7';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillText(`${eliminatedList.length} / ${TOTAL_COUNTRIES} ELIMINATED`, ARENA_X, 1758);
+
+    // 9. Bottom CTA Banner
+    roundRect(38, 1788, W - 76, 86, 18);
+    ctx.fillStyle = 'rgba(13, 18, 38, 0.94)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 30px sans-serif';
+    ctx.fillText('👍  LIKE IF YOU SEE YOUR COUNTRY FLAG', ARENA_X, 1842);
+
+    // 10. Winning King Celebration Modal
+    if (phase === 'CELEBRATION' && lastKing) {
+      confetti.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+      });
+
+      ctx.save();
+      roundRect(120, 615, W - 240, 465, 36);
+      ctx.fillStyle = 'rgba(8, 12, 28, 0.95)';
+      ctx.fill();
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#ffd000';
+      ctx.shadowColor = '#ffd000';
+      ctx.shadowBlur = 35;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd000';
+      ctx.font = '900 42px sans-serif';
+      ctx.fillText('👑 WINNING KING 👑', ARENA_X, 692);
+
+      drawSharpFlag(ARENA_X, 832, 94, lastKing, true);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 52px sans-serif';
+      ctx.fillText(lastKing.name.toUpperCase(), ARENA_X, 994);
+
+      ctx.fillStyle = '#00e5ff';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText(`Next 5-Min Match Starting in ${Math.ceil(celebrationTimer)}s...`, ARENA_X, 1048);
+      ctx.restore();
+    }
+  }
+
+  let lastTime = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+    if (gameStarted) {
+      update(dt);
+    }
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // Request Fullscreen on Document Root so #gameWrapper stays strictly 1080x1920
+  overlay.addEventListener('click', () => {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass && !audioCtx) {
+      audioCtx = new AudioContextClass();
+    }
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+    overlay.style.display = 'none';
+    gameStarted = true;
+    lastTime = performance.now();
+    initMatch();
+  });
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
